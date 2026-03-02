@@ -1,13 +1,14 @@
+import os
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-
-
 todos = [
-    {"id": 1, "task": "Learn Flask", "done": True},
-    {"id": 2, "task": "Build a cool app", "done": False},
+    {"id": 1, "task": "Learn Flask", "done": True, "priority": "medium"},
+    {"id": 2, "task": "Build a cool app", "done": False, "priority": "high"},
 ]
+
+VALID_PRIORITIES = {"high", "medium", "low"}
 
 @app.route("/todos", methods=["GET"])
 def get_todos():
@@ -15,10 +16,24 @@ def get_todos():
 
 @app.route("/todos", methods=["POST"])
 def add_todo():
+    if not request.is_json:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    data = request.get_json()
+    task = data.get("task")
+    priority = data.get("priority", "medium").lower()
+
+    if not task:
+        return jsonify({"error": "Missing 'task' field"}), 400
+
+    if priority not in VALID_PRIORITIES:
+        return jsonify({"error": f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}"}), 400
+
     new_todo = {
         "id": len(todos) + 1,
-        "task": request.json["task"],
+        "task": task,
         "done": False,
+        "priority": priority,
     }
     todos.append(new_todo)
     return jsonify(new_todo), 201
@@ -35,8 +50,21 @@ def update_todo(todo_id):
     todo = next((todo for todo in todos if todo["id"] == todo_id), None)
     if not todo:
         return jsonify({"error": "Todo not found"}), 404
-    todo["task"] = request.json.get("task", todo["task"])
-    todo["done"] = request.json.get("done", todo["done"])
+
+    if not request.is_json:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    data = request.get_json()
+    priority = data.get("priority")
+
+    if priority and priority.lower() not in VALID_PRIORITIES:
+        return jsonify({"error": f"Invalid priority. Must be one of: {', '.join(VALID_PRIORITIES)}"}), 400
+
+    todo["task"] = data.get("task", todo["task"])
+    todo["done"] = data.get("done", todo["done"])
+    if priority:
+        todo["priority"] = priority.lower()
+        
     return jsonify(todo)
 
 @app.route("/todos/<int:todo_id>", methods=["DELETE"])
